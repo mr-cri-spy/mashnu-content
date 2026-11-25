@@ -1,4 +1,6 @@
 """Thin LLM wrapper. Swap provider here only; the graph never imports an SDK."""
+import re
+import time
 from typing import Protocol
 
 from app.config import settings
@@ -35,23 +37,27 @@ class OpenAICompatLLM:
             base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=60
         )
 
-    def _discover_model(self) -> str:
-        """Pick a current text model when the configured one is gone (404). Prefers newest flash."""
+    def _candidates(self) -> list[str]:
+        """Stable numbered flash models first (newest version first), then other text models."""
         r = self.http.get("/models")
         r.raise_for_status()
         ids = [m["id"].removeprefix("models/") for m in r.json().get("data", [])]
-        bad = ("lite", "image", "tts", "live", "audio", "embed", "thinking", "preview", "exp", "vision")
-        pool = [i for i in ids if "flash" in i and not any(b in i for b in bad)] or \
-               [i for i in ids if i.startswith("gemini") and not any(b in i for b in bad)] or ids
-        if not pool:
-            raise RuntimeError(f"no usable models returned: {ids[:10]}")
-        return sorted(pool, reverse=True)[0]
+        bad = ("lite", "image", "tts", "live", "audio", "embed", "thinking", "exp", "vision", "omni", "robotics")
 
-    def _post(self, system: str, user: str):
+        def ver(i: str):
+            m = re.match(r"gemini-(\d+)(?:\.(\d+))?", i)
+            return (int(m.group(1)), int(m.group(2) or 0)) if m else (0, 0)
+
+        ok = [i for i in ids if i.startswith("gemini") and not any(b in i for b in bad)]
+        flash = sorted([i for i in ok if "flash" in i and "preview" not in i], key=ver, reverse=True)
+        rest = sorted([i for i in ok if i not in flash], key=ver, reverse=True)
+        return flash + rest
+
+    def _post(self, system: str, user: str, model: str):
         return self.http.post(
             "/chat/completions",
             json={
-                "model": self.model,
+                "model": model,
                 "max_tokens": 1500,
                 "messages": [
                     {"role": "system", "content": system},
@@ -61,11 +67,27 @@ class OpenAICompatLLM:
         )
 
     def complete(self, system: str, user: str) -> str:
-        r = self._post(system, user)
-        if r.status_code == 404:  # configured model unavailable: discover one and retry once
-            self.model = self._discover_model()
-            print(f"[llm] model not found, using {self.model}")
-            r = self._post(system, user)
+        r = self._post(system, user, self.model)
+        if r.status_code in (404, 429, 403):  # model gone or no quota: walk other models
+            if r.status_code == 429:
+                time.sleep(5)
+                r = self._post(system, user, self.model)
+            if r.status_code in (404, 429, 403):
+                tried = [self.model]
+                for m in self._candidates():
+                    if m in tried:
+                        continue
+                    tried.append(m)
+                    r = self._post(system, user, m)
+                    if r.is_success:
+                        self.model = m
+                        print(f"[llm] using {m}")
+                        break
+                    if len(tried) >= 9:
+                        break
+                    time.sleep(2)
+        if not r.is_success:
+            print(f"[llm] failed {r.status_code}: {r.text[:300]}")
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
