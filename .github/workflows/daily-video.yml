@@ -30,7 +30,7 @@ jobs:
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
           BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
           AUTO_PUBLISH: ${{ vars.AUTO_PUBLISH || 'false' }}
-        run: python -m app.video.daily "${{ github.event.inputs.topic }}"
+        run: python -m app.video.daily "${{ github.event.inputs.topic }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: short-${{ github.run_id }}
