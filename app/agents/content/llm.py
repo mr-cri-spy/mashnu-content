@@ -35,8 +35,20 @@ class OpenAICompatLLM:
             base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=60
         )
 
-    def complete(self, system: str, user: str) -> str:
-        r = self.http.post(
+    def _discover_model(self) -> str:
+        """Pick a current text model when the configured one is gone (404). Prefers newest flash."""
+        r = self.http.get("/models")
+        r.raise_for_status()
+        ids = [m["id"].removeprefix("models/") for m in r.json().get("data", [])]
+        bad = ("lite", "image", "tts", "live", "audio", "embed", "thinking", "preview", "exp", "vision")
+        pool = [i for i in ids if "flash" in i and not any(b in i for b in bad)] or \
+               [i for i in ids if i.startswith("gemini") and not any(b in i for b in bad)] or ids
+        if not pool:
+            raise RuntimeError(f"no usable models returned: {ids[:10]}")
+        return sorted(pool, reverse=True)[0]
+
+    def _post(self, system: str, user: str):
+        return self.http.post(
             "/chat/completions",
             json={
                 "model": self.model,
@@ -47,6 +59,13 @@ class OpenAICompatLLM:
                 ],
             },
         )
+
+    def complete(self, system: str, user: str) -> str:
+        r = self._post(system, user)
+        if r.status_code == 404:  # configured model unavailable: discover one and retry once
+            self.model = self._discover_model()
+            print(f"[llm] model not found, using {self.model}")
+            r = self._post(system, user)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
