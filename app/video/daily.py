@@ -13,8 +13,9 @@ from app.video.render import render_short
 PROMPT = (
     VOICE + "\n\nWrite a 30-45s vertical Short. Reply with ONLY JSON: "
     '{"title": str (<60 chars), "caption": str, "tags": [str], '
-    '"beats": [{"screen": str (<=8 words), "spoken": str}]} with 5-7 beats, ~100 spoken words total. '
-    "Beat 1 is a hook with a concrete specific. Never invent clients, metrics or results."
+    '"beats": [{"screen": str (<=6 punchy words), "spoken": str}]} with 5-7 beats, ~90 spoken words total, '
+    "short spoken sentences. Beat 1 is a scroll-stopping hook (bold claim or question with a concrete specific). "
+    "Last beat is a takeaway. Never invent clients, metrics or results."
 )
 
 
