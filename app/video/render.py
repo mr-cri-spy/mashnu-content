@@ -31,37 +31,47 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
 
 # ---------- audio ----------
 
-async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
-    """Save mp3, return [(word, start_s, end_s)] (empty if no word timings). Falls back to simpler
-    edge-tts options if the service rejects the fancy ones."""
+VOICES = [VOICE, "en-US-AndrewNeural", "en-IN-NeerjaNeural", "en-US-GuyNeural"]
+
+
+async def _edge(text: str, out: Path, voice: str, **kw) -> list[tuple[str, float, float]] | None:
     import edge_tts
 
-    attempts = [
-        {"rate": "+6%", "boundary": "WordBoundary"},
-        {"boundary": "WordBoundary"},
-        {},
-    ]
-    last: Exception | None = None
-    for kw in attempts:
-        words: list[tuple[str, float, float]] = []
+    words: list[tuple[str, float, float]] = []
+    got_audio = False
+    with open(out, "wb") as f:
+        async for ch in edge_tts.Communicate(text, voice, **kw).stream():
+            if ch["type"] == "audio":
+                f.write(ch["data"])
+                got_audio = True
+            elif ch["type"] == "WordBoundary":
+                s = ch["offset"] / 1e7
+                words.append((ch["text"], s, s + ch["duration"] / 1e7))
+    return words if got_audio else None
+
+
+def _espeak(text: str, out: Path) -> None:
+    """Offline last resort (robotic, but the daily video still ships)."""
+    subprocess.run(["espeak-ng", "-v", "en-us", "-s", "160", "-w", str(out), text], check=True)
+
+
+async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
+    """Save audio to `out`, return [(word, start_s, end_s)] (empty if no word timings).
+    edge-tts with retries/backoff and alternate voices; espeak-ng if the service keeps refusing."""
+    plans = [(VOICES[0], {"rate": "+6%", "boundary": "WordBoundary"}), (VOICES[0], {"boundary": "WordBoundary"}),
+             (VOICES[0], {})] + [(v, {}) for v in VOICES[1:]] + [(VOICES[0], {})]
+    for i, (voice, kw) in enumerate(plans):
         try:
-            comm = edge_tts.Communicate(text, VOICE, **kw)
-            got_audio = False
-            with open(out, "wb") as f:
-                async for ch in comm.stream():
-                    if ch["type"] == "audio":
-                        f.write(ch["data"])
-                        got_audio = True
-                    elif ch["type"] == "WordBoundary":
-                        s = ch["offset"] / 1e7
-                        words.append((ch["text"], s, s + ch["duration"] / 1e7))
-            if got_audio:
+            words = await _edge(text, out, voice, **kw)
+            if words is not None:
                 return words
+            print(f"[tts] attempt {i + 1} ({voice}, {kw}): no audio")
         except Exception as e:  # noqa: BLE001
-            last = e
-            print(f"[tts] attempt {kw} failed: {e!r}")
-        await asyncio.sleep(1)
-    raise RuntimeError(f"edge-tts failed: {last!r}")
+            print(f"[tts] attempt {i + 1} ({voice}, {kw}) failed: {e!r}")
+        await asyncio.sleep(min(3 * (i + 1), 12))
+    print("[tts] edge-tts unavailable, using espeak-ng fallback")
+    _espeak(text, out)
+    return []
 
 
 def _duration(p: Path) -> float:
