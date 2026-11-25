@@ -41,5 +41,18 @@ def run(topic: str, out_dir: str = "out", upload: bool = True, publish: bool = F
     return result
 
 
+TOPICS = [
+    "I built an AI content engine in one afternoon: FastAPI, LangGraph, free Gemini API, human approval before posting",
+    "Zapier vs owning your core: why per-task pricing hurts when every step calls an LLM",
+    "Why a WhatsApp AI lead responder helps clinics and real-estate brokers reply in seconds",
+    "A free-tier AI stack for startups: Gemini free API, FastAPI, Postgres, Docker",
+    "Why I never auto-post AI content: the human approval step in the Mashnu content engine",
+    "My AI critiques its own drafts and rewrites the weak ones: how the critique loop works",
+    "Voice agents vs chatbots for small businesses: when each one wins",
+]
+
 if __name__ == "__main__":
-    print(run(" ".join(sys.argv[1:]) or "Why I never auto-post AI content"))
+    import os
+
+    topic = " ".join(sys.argv[1:]) or TOPICS[date.today().toordinal() % len(TOPICS)]
+    print(run(topic, publish=os.getenv("AUTO_PUBLISH", "false").lower() == "true"))
