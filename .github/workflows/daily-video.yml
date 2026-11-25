@@ -27,6 +27,8 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
           AUTO_PUBLISH: ${{ vars.AUTO_PUBLISH || 'false' }}
         run: python -m app.video.daily "${{ github.event.inputs.topic }}"
       - uses: actions/upload-artifact@v4

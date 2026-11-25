@@ -26,9 +26,23 @@ def post_facebook(mp4, title: str, caption: str, publish: bool) -> str | None:
     return r.json().get("id")
 
 
+def post_bluesky(mp4, title: str, caption: str, publish: bool) -> str | None:
+    handle, pw = os.getenv("BSKY_HANDLE"), os.getenv("BSKY_APP_PASSWORD")
+    if not (handle and pw) or not publish:  # Bluesky has no drafts: only post when publishing
+        return None
+    from atproto import Client
+
+    c = Client()
+    c.login(handle, pw)
+    text = (title + "\n\n" + caption)[:290]
+    with open(mp4, "rb") as f:
+        r = c.send_video(text=text, video=f.read(), video_alt=title)
+    return r.uri
+
+
 def post_all(mp4, title: str, caption: str, publish: bool) -> dict:
     out = {}
-    for name, fn in (("facebook_id", post_facebook),):
+    for name, fn in (("facebook_id", post_facebook), ("bluesky_uri", post_bluesky)):
         try:
             out[name] = fn(mp4, title, caption, publish)
         except Exception as e:  # noqa: BLE001 - one platform must not break the others

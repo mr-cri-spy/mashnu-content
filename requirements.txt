@@ -11,3 +11,4 @@ edge-tts>=7.0
 google-api-python-client
 google-auth-oauthlib
 numpy
+atproto>=0.0.55
