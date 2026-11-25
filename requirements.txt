@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langgraph
+sqlalchemy
+httpx
+pydantic-settings
+anthropic
+pytest
+pillow
+edge-tts
+google-api-python-client
+google-auth-oauthlib
