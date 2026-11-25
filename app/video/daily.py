@@ -19,14 +19,22 @@ PROMPT = (
 )
 
 
-def plan(topic: str, llm: LLM | None = None) -> dict:
-    raw = (llm or get_llm()).complete(PROMPT, topic)
-    m = re.search(r"\{.*\}", raw, re.S)
-    if not m:
-        raise ValueError("LLM did not return JSON")
-    data = json.loads(m.group(0))
-    assert data["beats"], "no beats"
-    return data
+def plan(topic: str, llm: LLM | None = None, tries: int = 4) -> dict:
+    llm = llm or get_llm()
+    err: Exception | None = None
+    for i in range(tries):
+        raw = llm.complete(PROMPT, topic)
+        m = re.search(r"\{.*\}", raw, re.S)
+        try:
+            if not m:
+                raise ValueError("LLM did not return JSON")
+            data = json.loads(m.group(0))
+            assert data["beats"], "no beats"
+            return data
+        except (ValueError, KeyError, AssertionError) as e:  # bad/truncated JSON: ask again
+            err = e
+            print(f"[plan] attempt {i + 1} unusable: {e!r}")
+    raise RuntimeError(f"could not get a valid script: {err!r}")
 
 
 def run(topic: str, out_dir: str = "out", upload: bool = True, publish: bool = False) -> dict:

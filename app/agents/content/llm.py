@@ -70,7 +70,7 @@ class OpenAICompatLLM:
             "/chat/completions",
             json={
                 "model": model,
-                "max_tokens": 1500,
+                "max_tokens": 4096,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
