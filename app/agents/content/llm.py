@@ -26,6 +26,9 @@ class AnthropicLLM:
         return "".join(b.text for b in r.content if b.type == "text")
 
 
+RETRY = (404, 429, 403, 500, 502, 503, 504)
+
+
 class OpenAICompatLLM:
     """Any OpenAI-compatible chat endpoint (xAI Grok, Gemini, Groq, OpenRouter...)."""
 
@@ -34,7 +37,7 @@ class OpenAICompatLLM:
 
         self.model = model
         self.http = httpx.Client(
-            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=60
+            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=90
         )
 
     def _candidates(self) -> list[str]:
@@ -54,6 +57,15 @@ class OpenAICompatLLM:
         return flash + rest
 
     def _post(self, system: str, user: str, model: str):
+        import httpx
+
+        try:
+            return self._raw_post(system, user, model)
+        except httpx.TransportError as e:  # timeout / network blip: treat as retryable 504
+            print(f"[llm] {model} transport error: {e!r}")
+            return httpx.Response(504, text=repr(e), request=httpx.Request("POST", "http://llm"))
+
+    def _raw_post(self, system: str, user: str, model: str):
         return self.http.post(
             "/chat/completions",
             json={
@@ -68,11 +80,11 @@ class OpenAICompatLLM:
 
     def complete(self, system: str, user: str) -> str:
         r = self._post(system, user, self.model)
-        if r.status_code in (404, 429, 403):  # model gone or no quota: walk other models
-            if r.status_code == 429:
+        if r.status_code in RETRY:  # model gone or no quota: walk other models
+            if r.status_code in (429, 504):
                 time.sleep(5)
                 r = self._post(system, user, self.model)
-            if r.status_code in (404, 429, 403):
+            if r.status_code in RETRY:
                 tried = [self.model]
                 for m in self._candidates():
                     if m in tried:
