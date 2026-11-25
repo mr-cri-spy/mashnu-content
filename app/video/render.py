@@ -32,22 +32,36 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
 # ---------- audio ----------
 
 async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
-    """Save mp3, return [(word, start_s, end_s)] (empty if the service gave no word timings)."""
+    """Save mp3, return [(word, start_s, end_s)] (empty if no word timings). Falls back to simpler
+    edge-tts options if the service rejects the fancy ones."""
     import edge_tts
 
-    try:
-        comm = edge_tts.Communicate(text, VOICE, rate="+6%", boundary="WordBoundary")
-    except TypeError:  # older edge-tts
-        comm = edge_tts.Communicate(text, VOICE, rate="+6%")
-    words: list[tuple[str, float, float]] = []
-    with open(out, "wb") as f:
-        async for ch in comm.stream():
-            if ch["type"] == "audio":
-                f.write(ch["data"])
-            elif ch["type"] == "WordBoundary":
-                s = ch["offset"] / 1e7
-                words.append((ch["text"], s, s + ch["duration"] / 1e7))
-    return words
+    attempts = [
+        {"rate": "+6%", "boundary": "WordBoundary"},
+        {"boundary": "WordBoundary"},
+        {},
+    ]
+    last: Exception | None = None
+    for kw in attempts:
+        words: list[tuple[str, float, float]] = []
+        try:
+            comm = edge_tts.Communicate(text, VOICE, **kw)
+            got_audio = False
+            with open(out, "wb") as f:
+                async for ch in comm.stream():
+                    if ch["type"] == "audio":
+                        f.write(ch["data"])
+                        got_audio = True
+                    elif ch["type"] == "WordBoundary":
+                        s = ch["offset"] / 1e7
+                        words.append((ch["text"], s, s + ch["duration"] / 1e7))
+            if got_audio:
+                return words
+        except Exception as e:  # noqa: BLE001
+            last = e
+            print(f"[tts] attempt {kw} failed: {e!r}")
+        await asyncio.sleep(1)
+    raise RuntimeError(f"edge-tts failed: {last!r}")
 
 
 def _duration(p: Path) -> float:
