@@ -47,6 +47,9 @@ def run(topic: str, out_dir: str = "out", upload: bool = True, publish: bool = F
         from app.video.upload import upload_short
 
         result["youtube_id"] = upload_short(mp4, data["title"], data["caption"], data["tags"], publish)
+    from app.video.social import post_all
+
+    result.update(post_all(mp4, data["title"], data["caption"], publish))
     return result
 
 
