@@ -7,6 +7,6 @@ pydantic-settings
 anthropic
 pytest
 pillow
-edge-tts
+edge-tts>=7.0
 google-api-python-client
 google-auth-oauthlib
