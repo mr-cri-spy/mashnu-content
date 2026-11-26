@@ -80,6 +80,12 @@ class OpenAICompatLLM:
 
     def complete(self, system: str, user: str) -> str:
         r = self._post(system, user, self.model)
+        for wait in (20, 45, 90):  # transient overload: back off and retry the same model first
+            if r.status_code not in (429, 500, 502, 503, 504):
+                break
+            print(f"[llm] {r.status_code}, retrying in {wait}s")
+            time.sleep(wait)
+            r = self._post(system, user, self.model)
         if r.status_code in RETRY:  # model gone or no quota: walk other models
             if r.status_code in (429, 504):
                 time.sleep(5)
