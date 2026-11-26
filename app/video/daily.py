@@ -49,6 +49,8 @@ def run(topic: str, out_dir: str = "out", upload: bool = True, publish: bool = F
         result["youtube_id"] = upload_short(mp4, data["title"], data["caption"], data["tags"], publish)
     from app.video.social import post_all
 
+    from app.video.render import LAST_VOICE
+    result['voice'] = dict(LAST_VOICE)
     result.update(post_all(mp4, data["title"], data["caption"], publish))
     return result
 

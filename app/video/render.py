@@ -32,6 +32,7 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
 
 # ---------- audio ----------
 
+LAST_VOICE = {}
 VOICES = [VOICE, "en-US-AndrewNeural", "en-IN-NeerjaNeural", "en-US-GuyNeural"]
 
 
@@ -82,6 +83,7 @@ async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
         try:
             words = await _edge(text, out, voice, **kw)
             if words is not None:
+                LAST_VOICE['v'] = 'edge:' + voice
                 return words
             print(f"[tts] attempt {i + 1} ({voice}, {kw}): no audio")
         except Exception as e:  # noqa: BLE001
@@ -90,9 +92,12 @@ async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
     try:
         print("[tts] edge-tts unavailable, trying piper")
         _piper(text, out)
+        LAST_VOICE['v'] = 'piper'
         return []
     except Exception as e:  # noqa: BLE001
+        LAST_VOICE['err'] = repr(e)[:200]
         print(f"[tts] piper failed: {e!r}; using espeak-ng")
+    LAST_VOICE['v'] = 'espeak'
     _espeak(text, out)
     return []
 
