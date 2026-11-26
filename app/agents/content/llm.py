@@ -37,7 +37,7 @@ class OpenAICompatLLM:
 
         self.model = model
         self.http = httpx.Client(
-            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=45
+            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=100
         )
 
     def _candidates(self) -> list[str]:
