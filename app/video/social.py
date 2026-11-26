@@ -22,7 +22,8 @@ def post_facebook(mp4, title: str, caption: str, publish: bool) -> str | None:
             files={"source": f},
             timeout=300,
         )
-    r.raise_for_status()
+    if r.is_error:
+        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
     return r.json().get("id")
 
 
