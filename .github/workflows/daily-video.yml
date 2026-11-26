@@ -1,7 +1,7 @@
 name: daily-video
 on:
   schedule:
-    - cron: "0 3 * * *"   # 08:30 IST
+    - cron: "17 2 * * *"   # ~07:47 IST, off the hour so GitHub does not drop it
   workflow_dispatch:
     inputs:
       topic:
