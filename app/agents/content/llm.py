@@ -37,7 +37,7 @@ class OpenAICompatLLM:
 
         self.model = model
         self.http = httpx.Client(
-            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=90
+            base_url=base_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=45
         )
 
     def _candidates(self) -> list[str]:
@@ -80,8 +80,8 @@ class OpenAICompatLLM:
 
     def complete(self, system: str, user: str) -> str:
         r = self._post(system, user, self.model)
-        for wait in (20, 45, 90):  # transient overload: back off and retry the same model first
-            if r.status_code not in (429, 500, 502, 503, 504):
+        for wait in (15, 30):  # transient overload: back off and retry the same model first
+            if r.status_code not in (429, 503):
                 break
             print(f"[llm] {r.status_code}, retrying in {wait}s")
             time.sleep(wait)
