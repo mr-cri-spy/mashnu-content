@@ -5,6 +5,7 @@ Look: drifting glow background (accent colour changes each beat), pop-in headlin
 ghost beat number, growing underline, top progress bar, word-by-word highlighted captions."""
 import asyncio
 import math
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -55,6 +56,23 @@ def _espeak(text: str, out: Path) -> None:
     subprocess.run(["espeak-ng", "-v", "en-us", "-s", "160", "-w", str(out), text], check=True)
 
 
+PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium"
+
+
+def _piper(text: str, out: Path) -> None:
+    """Free offline neural voice (Piper). Model is fetched once from Hugging Face; raises on any failure."""
+    import urllib.request
+
+    d = Path(os.getenv("PIPER_DIR", "/tmp/piper"))
+    d.mkdir(parents=True, exist_ok=True)
+    for ext in (".onnx", ".onnx.json"):
+        f = d / ("voice" + ext)
+        if not f.exists():
+            urllib.request.urlretrieve(PIPER_BASE + ext, f)
+    subprocess.run(["python", "-m", "piper", "-m", str(d / "voice.onnx"), "-f", str(out)],
+                   input=text.encode(), check=True, timeout=240)
+
+
 async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
     """Save audio to `out`, return [(word, start_s, end_s)] (empty if no word timings).
     edge-tts with retries/backoff and alternate voices; espeak-ng if the service keeps refusing."""
@@ -69,7 +87,12 @@ async def _tts(text: str, out: Path) -> list[tuple[str, float, float]]:
         except Exception as e:  # noqa: BLE001
             print(f"[tts] attempt {i + 1} ({voice}, {kw}) failed: {e!r}")
         await asyncio.sleep(min(3 * (i + 1), 12))
-    print("[tts] edge-tts unavailable, using espeak-ng fallback")
+    try:
+        print("[tts] edge-tts unavailable, trying piper")
+        _piper(text, out)
+        return []
+    except Exception as e:  # noqa: BLE001
+        print(f"[tts] piper failed: {e!r}; using espeak-ng")
     _espeak(text, out)
     return []
 

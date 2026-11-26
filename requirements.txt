@@ -12,3 +12,4 @@ google-api-python-client
 google-auth-oauthlib
 numpy
 atproto>=0.0.55
+piper-tts>=1.2.0
